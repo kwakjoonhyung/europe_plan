@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>엄마 아빠의 유럽 여행 · 2026.05</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<link rel="stylesheet" href="styles.css?v=20260421c">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="data.js"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" src="icons.jsx"></script>
+<script type="text/babel" src="europe-map.jsx"></script>
+<script type="text/babel" src="city-map.jsx"></script>
+<script type="text/babel" src="day-view.jsx"></script>
+<script type="text/babel" src="panels.jsx"></script>
+
+<script type="text/babel">
+const { useState, useEffect } = React;
+
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "accentCoral": "#D94F3A",
+  "accentTeal": "#2E7D9A",
+  "accentForest": "#4A6B3A",
+  "accentOchre": "#B8873E",
+  "bgTone": "warm"
+}/*EDITMODE-END*/;
+
+const BG_TONES = {
+  warm: { bg: "#faf5eb", bg2: "#f5ede0", paper: "#fff6e8" },
+  cool: { bg: "#f4f6f5", bg2: "#e8ecec", paper: "#fafcfb" },
+  paper: { bg: "#f0ebe0", bg2: "#e5ddc8", paper: "#faf3e2" },
+};
+
+function App() {
+  // View state: 'home' | 'overview' | 'city:<id>' | 'day:<n>' | 'outskirts' | 'hotels' | 'checklist' | 'phrases'
+  const [view, setView] = useState(() => localStorage.getItem('__tripView') || 'home');
+  const [tweaks, setTweaks] = useState(TWEAK_DEFAULTS);
+  const [editMode, setEditMode] = useState(false);
+
+  useEffect(() => { localStorage.setItem('__tripView', view); }, [view]);
+
+  // Edit mode handshake
+  useEffect(() => {
+    function onMsg(e) {
+      const d = e.data || {};
+      if (d.type === '__activate_edit_mode') setEditMode(true);
+      if (d.type === '__deactivate_edit_mode') setEditMode(false);
+    }
+    window.addEventListener('message', onMsg);
+    window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+    return () => window.removeEventListener('message', onMsg);
+  }, []);
+
+  // Apply tone
+  useEffect(() => {
+    const tone = BG_TONES[tweaks.bgTone] || BG_TONES.warm;
+    document.documentElement.style.setProperty('--bg', tone.bg);
+    document.documentElement.style.setProperty('--bg-2', tone.bg2);
+    document.documentElement.style.setProperty('--paper', tone.paper);
+    document.documentElement.style.setProperty('--coral', tweaks.accentCoral);
+    document.documentElement.style.setProperty('--teal', tweaks.accentTeal);
+    document.documentElement.style.setProperty('--forest', tweaks.accentForest);
+    document.documentElement.style.setProperty('--ochre', tweaks.accentOchre);
+    // Update city colors
+    window.TRIP_DATA.cities.paris.color = tweaks.accentCoral;
+    window.TRIP_DATA.cities.annecy.color = tweaks.accentTeal;
+    window.TRIP_DATA.cities.chamonix.color = tweaks.accentForest;
+    window.TRIP_DATA.cities.milano.color = tweaks.accentOchre;
+  }, [tweaks]);
+
+  function updateTweak(key, val) {
+    const next = { ...tweaks, [key]: val };
+    setTweaks(next);
+    window.parent.postMessage({ type: '__edit_mode_set_keys', edits: { [key]: val } }, '*');
+  }
+
+  // Expose day jumper globally for nav buttons
+  useEffect(() => {
+    window.__goDay = (n) => setView(`day:${n}`);
+  }, []);
+
+  window.__goDay = (n) => setView(`day:${n}`);
+
+  function goHome() { setView('home'); }
+  function goCity(id) { setView(`city:${id}`); }
+  function goDay(n) { setView(`day:${n}`); }
+
+  // Active tab for nav
+  const activeCity = view.startsWith('city:') ? view.split(':')[1] : null;
+
+  return (
+    <div className="app">
+      <nav className="app-nav">
+        <div className="app-brand">
+          <span className="b-mark">Europe 2026</span>
+          <span className="b-sub">Parents' Trip</span>
+        </div>
+        <div className="nav-tabs">
+          <button className={`nav-tab ${view === 'home' ? 'active' : ''}`} onClick={() => setView('home')}>지도</button>
+          <button className={`nav-tab ${view === 'overview' ? 'active' : ''}`} onClick={() => setView('overview')}>일정표</button>
+          <button className={`nav-tab ${view === 'outskirts' ? 'active' : ''}`} onClick={() => setView('outskirts')}>파리 근교</button>
+          <button className={`nav-tab ${view === 'hotels' ? 'active' : ''}`} onClick={() => setView('hotels')}>숙소</button>
+          <button className={`nav-tab ${view === 'checklist' ? 'active' : ''}`} onClick={() => setView('checklist')}>체크리스트</button>
+          <button className={`nav-tab ${view === 'phrases' ? 'active' : ''}`} onClick={() => setView('phrases')}>회화</button>
+        </div>
+        <div className="nav-date">2026.05.22 – 05.31</div>
+      </nav>
+
+      {view === 'home' && (
+        <>
+          <div className="hero">
+            <div className="hero-kicker">For Mom & Dad · 30 Years in the Making · 10 Days · 4 Cities</div>
+            <h1 className="hero-title">
+              엄마 아빠의<br/>
+              <span className="serif">30년 만의</span> 유럽 여행.
+            </h1>
+            <p className="hero-sub">
+              파리의 미술관에서 알프스의 봉우리까지. 오래 기다려온 두 분의 봄날,
+              지도 위 어느 점이든 클릭해서 그 도시의 이야기를 열어보세요.
+            </p>
+            <div className="hero-meta">
+              <span>📅 5월 22일 금 → 5월 31일 일</span>
+              <span>✈ 인천 ⇄ 파리 CDG · 밀라노 말펜사</span>
+              <span>🛏 숙소 4곳 확정</span>
+            </div>
+          </div>
+          <EuropeMap onCityClick={goCity} activeCity={null}/>
+        </>
+      )}
+
+      {view === 'overview' && (
+        <OverviewPanel onDayClick={goDay} onCityClick={goCity}/>
+      )}
+
+      {activeCity && (
+        <CityMap cityId={activeCity} onBack={goHome} onDaySelect={goDay}/>
+      )}
+
+      {view.startsWith('day:') && (
+        <DayView dayN={Number(view.split(':')[1])} onBack={() => setView('overview')} onCityJump={goCity}/>
+      )}
+
+      {view === 'outskirts' && <OutskirtsPanel onBack={goHome}/>}
+      {view === 'hotels' && <HotelsPanel onBack={goHome}/>}
+      {view === 'checklist' && <ChecklistPanel onBack={goHome}/>}
+      {view === 'phrases' && <PhrasesPanel onBack={goHome}/>}
+
+      {editMode && (
+        <div className="tweaks-panel">
+          <h4>Tweaks</h4>
+          <div className="tweak-row">
+            <label>배경 톤</label>
+            <select value={tweaks.bgTone} onChange={e => updateTweak('bgTone', e.target.value)}>
+              <option value="warm">Warm (기본)</option>
+              <option value="cool">Cool</option>
+              <option value="paper">Paper</option>
+            </select>
+          </div>
+          <div className="tweak-row">
+            <label>파리</label>
+            <input type="color" value={tweaks.accentCoral} onChange={e => updateTweak('accentCoral', e.target.value)}/>
+          </div>
+          <div className="tweak-row">
+            <label>안시</label>
+            <input type="color" value={tweaks.accentTeal} onChange={e => updateTweak('accentTeal', e.target.value)}/>
+          </div>
+          <div className="tweak-row">
+            <label>샤모니</label>
+            <input type="color" value={tweaks.accentForest} onChange={e => updateTweak('accentForest', e.target.value)}/>
+          </div>
+          <div className="tweak-row">
+            <label>밀라노</label>
+            <input type="color" value={tweaks.accentOchre} onChange={e => updateTweak('accentOchre', e.target.value)}/>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

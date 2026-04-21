@@ -1,0 +1,10 @@
+{
+  "name": "europe-trip-planner",
+  "version": "1.0.0",
+  "description": "엄마 아빠의 30년 만의 유럽 여행 · 파리 · 안시 · 샤모니 · 밀라노",
+  "private": true,
+  "scripts": {
+    "dev": "npx serve .",
+    "start": "npx serve ."
+  }
+}
